@@ -4,12 +4,15 @@
 키와 모델은 환경변수로만 받는다: OPENAI_API_KEY, OPENAI_MODEL
 """
 
+import contextvars
 import json
 import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 ENDPOINT = "https://api.openai.com/v1/responses"
+# 호출마다 {"model", "input_tokens", "output_tokens"}를 쌓는 목록. API 서버가 요청마다 새 목록을 넣는다 (None이면 기록 안 함)
+USAGE = contextvars.ContextVar("llm_usage", default=None)
 
 
 class LLMError(RuntimeError):
@@ -94,7 +97,15 @@ def post(url, payload, timeout=120):
         raise LLMError("API 연결 실패 또는 시간 초과입니다. 네트워크를 확인하세요.") from None
     except (ValueError, UnicodeError):
         raise LLMError("API 응답을 읽을 수 없습니다.") from None
+    record_usage(payload.get("model"), response)
     return response
+
+
+def record_usage(model, response):
+    log, usage = USAGE.get(), (response.get("usage") if isinstance(response, dict) else None) or {}
+    if log is not None:  # Responses API는 input/output_tokens, 임베딩 API는 prompt_tokens
+        log.append({"model": model, "input_tokens": usage.get("input_tokens", usage.get("prompt_tokens", 0)),
+                    "output_tokens": usage.get("output_tokens", 0)})
 
 
 def model_from_env(model=None):
