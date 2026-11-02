@@ -51,18 +51,19 @@ flowchart TD
 
 재시도 횟수는 비용·지연과 맞바꿔 작게 잡았습니다 (`MAX_REQUERIES = 1`, `MAX_EXPLAIN_RETRIES = 2`).
 
-## 채용 공고 항목과 이 프로젝트
+## 기술 스택
 
-| 공고 항목 | 이 프로젝트 |
-|---|---|
-| LangGraph 기반 Agent 워크플로우 | 노드 7개, 조건 분기 4곳, 재시도 루프 2개 ([src/agent.py](src/agent.py)) |
-| RAG 파이프라인 (검색·Reranking) | 그래프 검색(Cypher) + 임베딩·키워드 하이브리드 점수 + MMR 다양성 ([src/rerank.py](src/rerank.py)) |
-| Function Calling / 도메인 Tool | Structured Outputs(JSON Schema)로 질문을 그래프 조회 조건으로 변환 ([src/query_parser.py](src/query_parser.py)). 별도 Tool 호출 방식은 쓰지 않음 |
-| FastAPI 서빙, 비동기 처리 | `POST /ask`, 동기 그래프·LLM 호출을 스레드로 돌려 이벤트 루프를 막지 않음 ([api.py](api.py)) |
-| 품질 평가·회귀 테스트 | pytest 21개, API 키·DB 없이 실행. 안전 위반 0, 재시도 횟수, 입력 검증까지 확인 ([tests/](tests/)) |
-| 비용·지연·품질 모니터링 | 응답마다 지연(ms)·LLM 호출 수·입력/출력 토큰. 요청이 동시에 와도 요청별로 따로 집계 |
-| 테스트·예외 처리 | 입력 오류 422, LLM 해석 실패 502, 설명 실패는 200 + `llm_error` (그래프 결과는 유지) |
-| 우대: Docker, AI 개발 도구 | Dockerfile(데모 앱), Claude Code로 개발 |
+| 영역 | 기술 | 구현 |
+|---|---|---|
+| Agent 워크플로우 | LangGraph | 노드 7개, 조건 분기 4곳, 재시도 루프 2개 ([src/agent.py](src/agent.py)) |
+| 지식그래프 | RDF/OWL (rdflib, owlrl), Neo4j | 재료 → 분류 → 알레르기 온톨로지, Cypher 조회·안전 필터 ([src/graph_search.py](src/graph_search.py)) |
+| 검색·리랭킹 | OpenAI Embeddings, NumPy | 임베딩·키워드 하이브리드 점수 + MMR 다양성, 안전한 후보 안에서만 순서 조정 ([src/rerank.py](src/rerank.py)) |
+| 질문 해석 | OpenAI Structured Outputs | JSON Schema로 질문 → 그래프 조회 조건, 온톨로지에 없는 값 거부 ([src/query_parser.py](src/query_parser.py)) |
+| API 서버 | FastAPI, Uvicorn | `POST /ask`, 동기 그래프·LLM 호출을 스레드로 돌려 이벤트 루프를 막지 않음 ([api.py](api.py)) |
+| 오류 처리 | HTTP 상태 코드 | 입력 오류 422, LLM 해석 실패 502, 설명 실패는 200 + `llm_error` (그래프 결과는 유지) |
+| 모니터링 | contextvars | 응답마다 지연(ms)·LLM 호출 수·입력/출력 토큰. 요청이 동시에 와도 요청별로 따로 집계 |
+| 테스트 | pytest | 21개, API 키·DB 없이 실행. 안전 위반 0, 재시도 횟수, 입력 검증까지 확인 ([tests/](tests/)) |
+| 배포·개발 도구 | Docker, Claude Code | Dockerfile(Streamlit 데모 앱), Claude Code로 개발 |
 
 ## 숫자
 
