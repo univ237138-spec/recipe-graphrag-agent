@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import agent  # noqa: E402
 import answer  # noqa: E402
 import graph_search  # noqa: E402
 import llm  # noqa: E402
@@ -36,6 +37,7 @@ class GraphRAG:
         self.run, self.graph, self.recipes = run, graph, recipes
         self.model, self.reasoning_effort = llm.model_from_env(model), reasoning_effort
         self.reranker = reranker
+        self.workflow = agent.build(self)
 
     def conditions(self, question=None, given=None):
         if given is not None:
@@ -43,22 +45,10 @@ class GraphRAG:
         return query_parser.parse(question, self.graph, self.model, self.reasoning_effort)
 
     def ask(self, question=None, conditions=None, explain=True):
-        cond = self.conditions(question, conditions)
-        ranker = (self.reranker.for_question(question, cond["exclude_allergens"], self.model)
-                  if self.reranker and question and cond["intent"] == "recommend" else None)
-        result = graph_search.search(self.run, cond, self.recipes, ranker)
-        notes = answer.safety_check(self.run, result) if result.get("not_found") is None else []
-        paragraphs, error = None, None
-        if explain and result.get("not_found") is None:
-            evidence = answer.build_evidence(result)
-            try:
-                reply = llm.call(answer.build_request(question or json.dumps(cond, ensure_ascii=False),
-                                                      result, evidence, self.model, self.reasoning_effort))
-                paragraphs = answer.validate_paragraphs(reply, evidence)
-            except llm.LLMError as exc:
-                error = str(exc)
-        return {"conditions": cond, "result": result, "paragraphs": paragraphs,
-                "safety_notes": notes, "llm_error": error}
+        """단계별 흐름은 src/agent.py (LangGraph)."""
+        state = self.workflow.invoke({"question": question, "given": conditions, "explain": explain})
+        return {"conditions": state["conditions"], "result": state["result"], "paragraphs": state.get("paragraphs"),
+                "safety_notes": state.get("safety_notes", []), "llm_error": state.get("llm_error")}
 
 
 def show(output):
