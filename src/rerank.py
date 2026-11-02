@@ -12,20 +12,20 @@
 2. 질문 확장 (Query Expansion): LLM이 취향을 레시피 글에 나올 재료·양념·조리법·맛 말로 풀어 쓴다.
     "매콤한" → "매콤한: 청양고추, 고추장, 고춧가루, …"
     레시피 글은 "매콤하다"가 아니라 재료 이름으로 적혀 있어서, 취향 말만 임베딩하면 "매콤한"이 "새콤한"(절임) 쪽으로
-    빗나갔다. 지금 방식 / 취향+요리 종류 / 확장 세 가지를 비교해 확장으로 정했다 (eval/rerank_query_compare.md).
+    빗나갔다. 지금 방식 / 취향+요리 종류 / 확장 세 가지를 비교해 확장으로 정했다 (docs/evaluation.md).
     확장 말에서 질문의 제외 알레르기 이름은 코드가 지운다 (LLM이 지시를 어기고 "우유" 등을 넣는 일이 있었다).
     확장을 못 하면(키 없음·오류) 취향 말만 임베딩한다.
 3. 점수 (하이브리드): 관련도 = 확장 문장 임베딩 · 레시피 임베딩 (코사인)
                              + 키워드 일치 × 0.05 (확장 말이 그 레시피의 재료·조리 순서에 실제로 들어 있는 개수)
                              − 경고 감점(주의 알레르기·구성 불명 재료)
    임베딩 유사도만으로는 취향 신호가 약했다 (긴 레시피 글과 짧은 문장의 유사도가 0.4~0.5에 몰림).
-   네 방식(질문 전체 / 취향+확장 / 질문 전체+확장 / 하이브리드)을 비교해 하이브리드로 정했다 (eval/rerank_variants.md).
+   네 방식(질문 전체 / 취향+확장 / 질문 전체+확장 / 하이브리드)을 비교해 하이브리드로 정했다 (docs/evaluation.md).
    키워드 일치는 근거로도 쓴다: 고른 요리마다 레시피에 실제로 들어 있는 확장 말(matched_terms)을 보여 준다.
    다양성 (MMR): 다음 요리 = argmax λ × 관련도 − (1 − λ) × (이미 고른 요리와의 최대 유사도)
    취향이 없으면 관련도 없이 다양성만으로 고른다.
    LLM·API는 새 취향의 확장·임베딩에만 쓴다 (저장해 다시 씀). 점수 계산은 코드만.
 
-레시피 임베딩: data/vector_index.npz (vector_rag.py --build, 이름·종류·영양·재료 원문·조리 순서).
+레시피 임베딩: data/vector_index.npz (text-embedding-3-small, 이름·종류·영양·재료 원문·조리 순서. 이전 프로젝트에서 만듦).
 확장 결과와 임베딩은 data/query_embeddings.json에 저장해 다시 쓴다 → 같은 질문이면 늘 같은 순서, API는 한 번만.
 레시피 임베딩 파일이 없거나 임베딩을 못 만들면 for_question()이 None → 추천은 레시피 번호순.
 """
@@ -238,7 +238,7 @@ def main():
         parser.error("질문을 주거나 --app-examples를 쓰세요.")
     reranker = load()
     if reranker is None:
-        sys.exit(f"레시피 임베딩이 없습니다: {INDEX_PATH} (python src/vector_rag.py --build)")
+        sys.exit(f"레시피 임베딩이 없습니다: {INDEX_PATH}")
     import recipe_graph
     names = {rid: r["name"] for rid, r in recipe_graph.load_recipes().items()}
     ids = list(reranker.row)

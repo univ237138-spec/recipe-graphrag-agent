@@ -600,11 +600,11 @@ st.markdown(  # 제목 앞 엠블럼 (st.title은 이미지를 못 넣어 HTML�
 st.caption("식약처 레시피 1,156개 · OWL 온톨로지(분류 74개, 알레르기 19개) · Neo4j 지식그래프 · "
            "**LLM은 말을 다루고, 안전 판단은 그래프가 한다**")
 
-tab_ask, tab_graph = st.tabs(["💬 질문하기", "📜 근거 그래프 · 법령"])  # 10/30 평가 결과 탭은 뺌 (평가는 eval/ 보고서로)
+tab_ask, tab_graph = st.tabs(["💬 질문하기", "📜 근거 그래프 · 법령"])
 
 with tab_ask:
     # 10/30 챗봇 형태: 예시 질문 버튼이나 아래 입력창으로 물으면 대화로 답한다
-    _, top_right = st.columns([3, 1])  # 10/30 '벡터 RAG와 나란히 비교'는 뺌 (비교는 eval/ 평가 보고서로)
+    _, top_right = st.columns([3, 1])
     if top_right.button("대화 지우기", key="clear_chat", width="stretch"):
         st.session_state.messages = []
         st.session_state.pop("last", None)

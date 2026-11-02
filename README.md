@@ -5,11 +5,7 @@
 공개 데모 [recipe-graphrag-demo](https://github.com/univ237138-spec/recipe-graphrag-demo)(Streamlit)의 질문 처리를
 **LangGraph 워크플로우**로 다시 짜고, **비동기 API 서버**, **지연·토큰 기록**, **회귀 테스트**를 더했습니다.
 
-```
-질문: "우유 알레르기가 있어. 반찬 3개 추천해줘"
-→ 질문 해석(LLM) → 그래프 조회 → 리랭킹 → 안전 검사 → 설명(LLM) → 근거 검증
-→ 추천 3개 + 문단마다 근거 ID가 붙은 설명 + metrics {latency_ms, llm_calls, input_tokens, output_tokens}
-```
+![LangGraph 워크플로우](docs/images/workflow.svg)
 
 ## 설계 원칙
 
@@ -18,26 +14,7 @@
 - **LLM 출력은 믿지 않고 검사한다.** 질문 해석 결과는 온톨로지에 있는 값인지, 설명은 문단마다 실제 근거 ID를 인용했는지 확인한다.
 - **실패해도 위험한 답은 내보내지 않는다.** 설명이 끝까지 검증을 통과하지 못하면 설명 없이 그래프 결과만 돌려준다.
 
-## LangGraph 워크플로우 ([src/agent.py](src/agent.py))
-
-```mermaid
-flowchart TD
-    S([시작]) --> parse[parse<br/>질문 해석]
-    parse --> retrieve[retrieve<br/>그래프 조회]
-    retrieve -->|추천 + 질문 있음| rerank[rerank<br/>취향 확장·임베딩]
-    retrieve -->|추천| select
-    retrieve -->|안전 확인·세기 등| explain
-    retrieve -->|레시피 없음 / 설명 끔| E([끝])
-    rerank --> select[select<br/>안전 후보에서 고르기]
-    select --> safety[safety<br/>별도 쿼리로 재확인]
-    safety -->|빠진 요리 있음, 1회| select
-    safety --> explain[explain<br/>근거 기반 설명]
-    safety -->|설명 끔| E
-    explain --> verify[verify<br/>근거 ID 검증]
-    explain -->|API 오류| E
-    verify -->|검증 실패, 2회까지| explain
-    verify --> E
-```
+## LangGraph 노드 ([src/agent.py](src/agent.py))
 
 | 노드 | 하는 일 | LLM |
 |---|---|---|
@@ -50,6 +27,16 @@ flowchart TD
 | verify | 모든 문단이 근거 ID를 갖고, 그 ID가 실제 근거 목록에 있는지 확인. 실패 시 2회까지 재생성 | |
 
 재시도 횟수는 비용·지연과 맞바꿔 작게 잡았습니다 (`MAX_REQUERIES = 1`, `MAX_EXPLAIN_RETRIES = 2`).
+
+## 실행 화면
+
+**API (`POST /ask`)**: 질문 하나에 추천·근거 ID가 붙은 설명·metrics(지연, LLM 호출 수, 토큰)를 돌려줍니다.
+
+![API 응답](docs/images/api-response.png)
+
+**데모 앱 (Streamlit)**: 결론과 근거 경로(재료 → 분류 → 알레르기 → 법령 조항)를 함께 보여줍니다. API 키 없이 동작합니다.
+
+![데모 앱](docs/images/demo-app.png)
 
 ## 기술 스택
 
@@ -65,16 +52,19 @@ flowchart TD
 | 테스트 | pytest | 21개, API 키·DB 없이 실행. 안전 위반 0, 재시도 횟수, 입력 검증까지 확인 ([tests/](tests/)) |
 | 배포·개발 도구 | Docker, Claude Code | Dockerfile(Streamlit 데모 앱), Claude Code로 개발 |
 
-## 숫자
+## 평가
 
-이전 프로젝트([recipe-graphrag-demo](https://github.com/univ237138-spec/recipe-graphrag-demo))에서 측정한 값입니다.
+![평가 결과](docs/images/evaluation.png)
+
+질문 처리 코드는 이전 프로젝트에서 평가했습니다. 측정 방법·전체 결과·한계는 [docs/evaluation.md](docs/evaluation.md)에 있습니다.
 
 - 데이터: 레시피 1,156개, 재료 1,632개, 분류 74개, 알레르기 19개
 - 3중 교차 검증(Python · OWL RL 추론 · Neo4j Cypher): 레시피 1,156개 판정 불일치 0
-- 설명의 근거 충실도(faithfulness): 86.4% → 99.3% (근거 ID 강제 인용 후, 단일 실행)
-- 리랭킹: 추천 다양성 19 → 36, 규칙 적합도 12 → 16/24, 안전 위반 0
+- 정답률 58문항: GraphRAG 95%, 벡터 RAG 38% (같은 데이터·같은 LLM). 검색 오염률 0% vs 54%
+- 근거 충실도: 86.4% → 99.3% (그래프 판정을 근거 목록에 넣은 뒤, LLM 채점, 1회차 답 기준)
+- 리랭킹: 추천 다양성 19 → 36, 재료 규칙 적합도 12 → 16/24, 안전 위반 0 (LLM 채점 적합도는 20 → 18/36으로 엇갈림)
 
-이 저장소에서 실제 키로 확인한 값 (gpt-5-mini, 질문 1개): 23.7초, LLM 호출 2회, 토큰 입력 4,105 / 출력 2,525.
+이 저장소에서 실제 키로 확인한 값 (gpt-5-mini, 질문 2개): 23.7초 · 42.9초, LLM 호출 각 2회, 토큰 입력 약 4,100 / 출력 2,500~3,700.
 지연은 대부분 LLM 두 번(질문 해석·설명)에서 나옵니다.
 
 ## 실행
@@ -102,7 +92,7 @@ POST /ask
 ```
 
 - 그래프: `NEO4J_PASSWORD`(+ `NEO4J_URI`)가 있으면 Neo4j, 없으면 메모리 그래프([src/local_graph.py](src/local_graph.py), Neo4j 결과와 1,156개 모두 일치 확인).
-- 터미널: `python src/ask.py "질문"` / 워크플로우 그림: `python src/agent.py` (Mermaid 출력)
+- 터미널: `python src/ask.py "질문"` / 워크플로우 구조 출력: `python src/agent.py` (Mermaid)
 - Streamlit 데모 앱: `streamlit run app.py` 또는 Docker (`docker build -t recipe-graphrag . && docker run --rm -p 8501:8501 recipe-graphrag`)
 
 ## 구조
@@ -119,6 +109,7 @@ src/answer.py       근거 목록, 설명 요청·검증, 안전 검사
 src/llm.py          OpenAI 호출, 토큰 기록
 ontology/           알레르기 온톨로지(TTL), 법령 조항
 tests/              회귀 테스트
+docs/               평가 요약, README 이미지
 ```
 
 ## 데이터 출처

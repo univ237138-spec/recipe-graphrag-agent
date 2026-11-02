@@ -74,7 +74,7 @@ def embed(texts, model=None, timeout=120):
 def post(url, payload, timeout=120):
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
-        raise LLMError("OPENAI_API_KEY 환경변수가 필요합니다. 키 없이 확인하려면 --dry-run을 쓰세요.")
+        raise LLMError("OPENAI_API_KEY 환경변수가 필요합니다.")
     http_request = Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
